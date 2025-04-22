@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "updates": {
       "enabled": false,
-      "checkAutomatically": "OFF"
+      "checkAutomatically": "NEVER"
     },
     "ios": {
       "supportsTablet": true

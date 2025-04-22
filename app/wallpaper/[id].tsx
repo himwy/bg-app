@@ -18,6 +18,9 @@ import {
   getWallpaperById,
   setAsWallpaper,
   saveToGallery,
+  isRunningInExpoGo,
+  showExpoGoWarning,
+  logger,
 } from "@/services/wallpaperService";
 import { Colors } from "@/constants/Colors";
 import { useColorScheme } from "@/hooks/useColorScheme";
@@ -27,6 +30,9 @@ export default function WallpaperDetailScreen() {
   const wallpaper = getWallpaperById(id || "");
   const colorScheme = useColorScheme() ?? "light";
   const [loading, setLoading] = useState(false);
+
+  // Check for Expo Go limitations
+  const isInExpoGo = isRunningInExpoGo();
 
   if (!wallpaper) {
     return (
@@ -48,25 +54,92 @@ export default function WallpaperDetailScreen() {
     );
   }
 
+  // Determine image source based on whether it's local or remote
+  const getImageSource = () => {
+    if (wallpaper.isLocal && wallpaper.localImage) {
+      return wallpaper.localImage;
+    } else {
+      return { uri: wallpaper.imageUrl };
+    }
+  };
+
   const handleAction = async (action: "save" | "home" | "lock" | "both") => {
     try {
       setLoading(true);
 
+      // If running in Expo Go on Android, show a warning about limited functionality
+      if (isInExpoGo && Platform.OS === "android") {
+        showExpoGoWarning();
+      }
+
       if (action === "save") {
-        await saveToGallery(wallpaper.imageUrl);
-        Alert.alert("Success", "Wallpaper saved to gallery", [{ text: "OK" }]);
+        // If it's a local image, we need a different approach for saving
+        if (wallpaper.isLocal) {
+          Alert.alert(
+            "Success",
+            "This wallpaper is already saved locally in the app",
+            [{ text: "OK" }]
+          );
+          setLoading(false);
+          return;
+        }
+
+        try {
+          await saveToGallery(wallpaper.imageUrl);
+          Alert.alert("Success", "Wallpaper saved to gallery", [
+            { text: "OK" },
+          ]);
+        } catch (error) {
+          logger.error("Failed to save to gallery:", error);
+          if (isInExpoGo) {
+            Alert.alert(
+              "Expo Go Limitation",
+              "This functionality has limited support in Expo Go. For full functionality, consider creating a development build.",
+              [{ text: "OK" }]
+            );
+          } else {
+            Alert.alert(
+              "Error",
+              "Failed to save wallpaper. Please check app permissions.",
+              [{ text: "OK" }]
+            );
+          }
+        }
       } else {
-        await setAsWallpaper(wallpaper.imageUrl, action);
-        Alert.alert(
-          "Success",
-          Platform.OS === "android"
-            ? "Wallpaper set successfully"
-            : "Wallpaper saved to photos. Please set it as wallpaper from your gallery.",
-          [{ text: "OK" }]
-        );
+        // Handle setting wallpaper (local or remote)
+        try {
+          // For local wallpapers, we pass an empty string and let wallpaperService.ts
+          // find the actual image through the wallpaper ID
+          const imageUrlToUse = wallpaper.isLocal ? "" : wallpaper.imageUrl;
+
+          await setAsWallpaper(imageUrlToUse, action);
+
+          Alert.alert(
+            "Success",
+            Platform.OS === "android"
+              ? "Wallpaper set successfully"
+              : "Wallpaper saved to photos. Please set it as wallpaper from your gallery.",
+            [{ text: "OK" }]
+          );
+        } catch (error) {
+          logger.error("Failed to set wallpaper:", error);
+          if (isInExpoGo) {
+            Alert.alert(
+              "Expo Go Limitation",
+              "This functionality has limited support in Expo Go. For full functionality, consider creating a development build.",
+              [{ text: "OK" }]
+            );
+          } else {
+            Alert.alert(
+              "Error",
+              "Failed to set wallpaper. Please check app permissions.",
+              [{ text: "OK" }]
+            );
+          }
+        }
       }
     } catch (error) {
-      console.error("Error with wallpaper action:", error);
+      logger.error("General error with wallpaper action:", error);
       Alert.alert("Error", "Failed to complete action. Please try again.", [
         { text: "OK" },
       ]);
@@ -83,8 +156,17 @@ export default function WallpaperDetailScreen() {
         <Ionicons name="arrow-back" size={28} color="white" />
       </TouchableOpacity>
 
+      {isInExpoGo && Platform.OS === "android" && (
+        <View style={styles.warningBanner}>
+          <Ionicons name="warning-outline" size={18} color="#fff" />
+          <ThemedText style={styles.warningText}>
+            Limited functionality in Expo Go
+          </ThemedText>
+        </View>
+      )}
+
       <Image
-        source={{ uri: wallpaper.imageUrl }}
+        source={getImageSource()}
         style={styles.image}
         resizeMode="cover"
       />
@@ -230,5 +312,21 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  warningBanner: {
+    position: "absolute",
+    top: 50,
+    left: 60,
+    right: 16,
+    zIndex: 10,
+    backgroundColor: "rgba(255,165,0,0.8)",
+    borderRadius: 8,
+    padding: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  warningText: {
+    color: "white",
+    marginLeft: 8,
   },
 });

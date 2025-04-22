@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Modal,
   View,
@@ -39,25 +39,37 @@ export const UploadWallpaperModal = ({
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const [existingCategories, setExistingCategories] = useState<string[]>(
-    getAllCategories()
-  );
+  const [existingCategories, setExistingCategories] = useState<string[]>([]);
+  const [showCreateCategory, setShowCreateCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
+
+  // Refresh categories when modal becomes visible
+  useEffect(() => {
+    if (visible) {
+      setExistingCategories(getAllCategories());
+    }
+  }, [visible]);
 
   const handleSingleUpload = async () => {
     if (!category) {
-      Alert.alert("Error", "Please enter a category");
+      Alert.alert("Error", "Please select or create a category");
       return;
     }
 
     try {
       setLoading(true);
+      // We're leaving wallpaperName blank here intentionally
+      // so the name will be extracted from the file name
       const result = await addWallpaperFromGallery(
-        wallpaperName || "New Wallpaper",
+        wallpaperName, // If blank, will use filename
         category
       );
 
       if (result) {
-        Alert.alert("Success", "Wallpaper uploaded successfully");
+        Alert.alert(
+          "Success",
+          "Wallpaper uploaded and categorized successfully"
+        );
         setWallpaperName("");
         setCategory("");
         setPreviewUri(null);
@@ -75,7 +87,7 @@ export const UploadWallpaperModal = ({
 
   const handleBulkUpload = async () => {
     if (!category) {
-      Alert.alert("Error", "Please enter a category");
+      Alert.alert("Error", "Please select or create a category");
       return;
     }
 
@@ -86,7 +98,7 @@ export const UploadWallpaperModal = ({
       if (results.length > 0) {
         Alert.alert(
           "Success",
-          `${results.length} wallpapers uploaded successfully`
+          `${results.length} wallpapers uploaded and categorized successfully`
         );
         setCategory("");
         onUploadComplete();
@@ -105,6 +117,22 @@ export const UploadWallpaperModal = ({
 
   const selectCategory = (selectedCategory: string) => {
     setCategory(selectedCategory);
+    setShowCreateCategory(false);
+  };
+
+  const handleAddCategory = () => {
+    if (!newCategory.trim()) {
+      Alert.alert("Error", "Please enter a category name");
+      return;
+    }
+
+    // Add the new category and select it
+    setCategory(newCategory);
+    if (!existingCategories.includes(newCategory)) {
+      setExistingCategories([...existingCategories, newCategory].sort());
+    }
+    setNewCategory("");
+    setShowCreateCategory(false);
   };
 
   return (
@@ -133,22 +161,14 @@ export const UploadWallpaperModal = ({
           <ScrollView style={styles.scrollContent}>
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Category *</ThemedText>
-              <TextInput
-                style={[
-                  styles.input,
-                  { color: Colors[colorScheme ?? "light"].text },
-                ]}
-                placeholderTextColor={
-                  Colors[colorScheme ?? "light"].text + "80"
-                }
-                value={category}
-                onChangeText={setCategory}
-                placeholder="Enter category (required)"
-              />
+              <ThemedText style={styles.helperText}>
+                Choose an existing category or create a new one. Images will be
+                organized in folders by category.
+              </ThemedText>
 
               {existingCategories.length > 0 && (
                 <>
-                  <ThemedText style={styles.label}>
+                  <ThemedText style={styles.subLabel}>
                     Existing Categories
                   </ThemedText>
                   <ScrollView
@@ -183,6 +203,69 @@ export const UploadWallpaperModal = ({
                   </ScrollView>
                 </>
               )}
+
+              <View style={styles.categoryActionContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.categoryActionButton,
+                    { backgroundColor: Colors[colorScheme ?? "light"].tint },
+                  ]}
+                  onPress={() => setShowCreateCategory(true)}
+                >
+                  <Ionicons name="add-circle" size={16} color="#fff" />
+                  <ThemedText
+                    style={styles.categoryActionText}
+                    lightColor="#fff"
+                    darkColor="#fff"
+                  >
+                    New Category
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+
+              {showCreateCategory && (
+                <View style={styles.createCategoryContainer}>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      { color: Colors[colorScheme ?? "light"].text },
+                    ]}
+                    placeholderTextColor={
+                      Colors[colorScheme ?? "light"].text + "80"
+                    }
+                    value={newCategory}
+                    onChangeText={setNewCategory}
+                    placeholder="Enter new category name"
+                    autoFocus
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.addButton,
+                      { backgroundColor: Colors[colorScheme ?? "light"].tint },
+                    ]}
+                    onPress={handleAddCategory}
+                  >
+                    <ThemedText
+                      style={styles.addButtonText}
+                      lightColor="#fff"
+                      darkColor="#fff"
+                    >
+                      Add
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!showCreateCategory && category && (
+                <View style={styles.selectedCategoryContainer}>
+                  <ThemedText style={styles.selectedCategoryLabel}>
+                    Selected:
+                  </ThemedText>
+                  <ThemedText style={styles.selectedCategoryValue}>
+                    {category}
+                  </ThemedText>
+                </View>
+              )}
             </View>
 
             <View style={styles.inputGroup}>
@@ -190,8 +273,8 @@ export const UploadWallpaperModal = ({
                 Wallpaper Name (Optional)
               </ThemedText>
               <ThemedText style={styles.helperText}>
-                For single uploads only. Multiple uploads will be named
-                automatically.
+                Leave blank to use filenames automatically. This is recommended
+                for better organization.
               </ThemedText>
               <TextInput
                 style={[
@@ -203,7 +286,7 @@ export const UploadWallpaperModal = ({
                 }
                 value={wallpaperName}
                 onChangeText={setWallpaperName}
-                placeholder="Enter name (optional)"
+                placeholder="Enter custom name (optional)"
               />
             </View>
 
@@ -221,6 +304,7 @@ export const UploadWallpaperModal = ({
                 style={[
                   styles.button,
                   { backgroundColor: Colors[colorScheme ?? "light"].tint },
+                  !category && styles.disabledButton,
                 ]}
                 onPress={handleSingleUpload}
                 disabled={loading || !category}
@@ -245,6 +329,7 @@ export const UploadWallpaperModal = ({
                 style={[
                   styles.button,
                   { backgroundColor: Colors[colorScheme ?? "light"].tint },
+                  !category && styles.disabledButton,
                 ]}
                 onPress={handleBulkUpload}
                 disabled={loading || !category}
@@ -268,12 +353,16 @@ export const UploadWallpaperModal = ({
 
             <View style={styles.helpTextContainer}>
               <ThemedText style={styles.helpText}>
-                <Ionicons name="information-circle" size={16} /> Single Upload:
-                Select one image and add details
+                <Ionicons name="information-circle" size={16} /> Wallpapers are
+                automatically named from filenames
               </ThemedText>
               <ThemedText style={styles.helpText}>
-                <Ionicons name="information-circle" size={16} /> Bulk Upload:
-                Select multiple images at once
+                <Ionicons name="information-circle" size={16} /> Each category
+                creates a separate folder
+              </ThemedText>
+              <ThemedText style={styles.helpText}>
+                <Ionicons name="information-circle" size={16} /> Use bulk upload
+                to add multiple images at once
               </ThemedText>
             </View>
           </ScrollView>
@@ -317,6 +406,12 @@ const styles = StyleSheet.create({
   label: {
     fontWeight: "600",
     marginBottom: 8,
+    fontSize: 16,
+  },
+  subLabel: {
+    fontWeight: "500",
+    marginBottom: 8,
+    fontSize: 14,
   },
   input: {
     borderWidth: 1,
@@ -355,6 +450,52 @@ const styles = StyleSheet.create({
   selectedCategoryText: {
     color: "#fff",
   },
+  categoryActionContainer: {
+    marginVertical: 10,
+  },
+  categoryActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    alignSelf: "flex-start",
+  },
+  categoryActionText: {
+    fontSize: 14,
+    marginLeft: 5,
+    fontWeight: "500",
+  },
+  createCategoryContainer: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+  addButton: {
+    marginLeft: 8,
+    padding: 12,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  addButtonText: {
+    fontWeight: "600",
+  },
+  selectedCategoryContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "rgba(0, 122, 255, 0.1)",
+    borderRadius: 8,
+  },
+  selectedCategoryLabel: {
+    fontWeight: "600",
+    marginRight: 5,
+  },
+  selectedCategoryValue: {
+    fontWeight: "bold",
+  },
   previewContainer: {
     alignItems: "center",
     marginBottom: 20,
@@ -376,6 +517,9 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     marginHorizontal: 4,
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
   buttonText: {
     marginLeft: 8,

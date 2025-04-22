@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   ScrollView,
@@ -26,54 +26,59 @@ const setupConsoleCapture = (addLogEntry: (entry: LogEntry) => void) => {
 
   console.log = (...args) => {
     originalConsoleLog(...args);
-    addLogEntry({
+    const entry = {
       timestamp: new Date(),
-      type: "log",
+      type: "log" as const,
       message: args
         .map((arg) =>
           typeof arg === "object" ? JSON.stringify(arg) : String(arg)
         )
         .join(" "),
-    });
+    };
+    // Use setTimeout to avoid updating state during render
+    setTimeout(() => addLogEntry(entry), 0);
   };
 
   console.error = (...args) => {
     originalConsoleError(...args);
-    addLogEntry({
+    const entry = {
       timestamp: new Date(),
-      type: "error",
+      type: "error" as const,
       message: args
         .map((arg) =>
           typeof arg === "object" ? JSON.stringify(arg) : String(arg)
         )
         .join(" "),
-    });
+    };
+    setTimeout(() => addLogEntry(entry), 0);
   };
 
   console.warn = (...args) => {
     originalConsoleWarn(...args);
-    addLogEntry({
+    const entry = {
       timestamp: new Date(),
-      type: "warn",
+      type: "warn" as const,
       message: args
         .map((arg) =>
           typeof arg === "object" ? JSON.stringify(arg) : String(arg)
         )
         .join(" "),
-    });
+    };
+    setTimeout(() => addLogEntry(entry), 0);
   };
 
   console.info = (...args) => {
     originalConsoleInfo(...args);
-    addLogEntry({
+    const entry = {
       timestamp: new Date(),
-      type: "info",
+      type: "info" as const,
       message: args
         .map((arg) =>
           typeof arg === "object" ? JSON.stringify(arg) : String(arg)
         )
         .join(" "),
-    });
+    };
+    setTimeout(() => addLogEntry(entry), 0);
   };
 
   return () => {
@@ -91,6 +96,8 @@ const formatTime = (date: Date) => {
 const DebugConsole: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [visible, setVisible] = useState(false);
+  const logsRef = useRef<LogEntry[]>([]);
+
   const backgroundColor = useThemeColor(
     { light: "#e0e0e0", dark: "#222" },
     "background"
@@ -103,24 +110,26 @@ const DebugConsole: React.FC = () => {
 
   useEffect(() => {
     const addLogEntry = (entry: LogEntry) => {
-      setLogs((prevLogs) => {
-        // Keep only the last 100 logs to prevent memory issues
-        const newLogs = [...prevLogs, entry];
-        if (newLogs.length > 100) {
-          return newLogs.slice(newLogs.length - 100);
-        }
-        return newLogs;
-      });
+      // Use the ref to track logs between renders
+      logsRef.current = [...logsRef.current, entry];
+      // Limit to last 100 logs
+      if (logsRef.current.length > 100) {
+        logsRef.current = logsRef.current.slice(logsRef.current.length - 100);
+      }
+      // Update state safely outside of render
+      setLogs([...logsRef.current]);
     };
 
     const cleanup = setupConsoleCapture(addLogEntry);
 
-    // Add initial log entry
-    addLogEntry({
-      timestamp: new Date(),
-      type: "info",
-      message: "Debug console initialized",
-    });
+    // Add initial log entry - using setTimeout to avoid issues during render
+    setTimeout(() => {
+      addLogEntry({
+        timestamp: new Date(),
+        type: "info",
+        message: "Debug console initialized",
+      });
+    }, 100);
 
     return () => {
       cleanup();
@@ -128,6 +137,7 @@ const DebugConsole: React.FC = () => {
   }, []);
 
   const clearLogs = () => {
+    logsRef.current = [];
     setLogs([]);
   };
 

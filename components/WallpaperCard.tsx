@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Dimensions,
   View,
+  Platform,
 } from "react-native";
 import { Link } from "expo-router";
 import { ThemedText } from "./ThemedText";
@@ -12,13 +13,15 @@ import {
   WallpaperItem,
   toggleFavorite,
   isFavorite,
+  logger,
+  isRunningInExpoGo,
 } from "@/services/wallpaperService";
 import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "@/hooks/useColorScheme";
 import { Colors } from "@/constants/Colors";
 
 const { width } = Dimensions.get("window");
-const cardWidth = (width - 48) / 2; // Two columns with padding
+const cardWidth = (width - 52) / 3; // Three columns with padding
 
 interface WallpaperCardProps {
   wallpaper: WallpaperItem;
@@ -37,8 +40,12 @@ export function WallpaperCard({
   useEffect(() => {
     // Check if this wallpaper is favorited
     const checkFavoriteStatus = async () => {
-      const favStatus = await isFavorite(wallpaper.id);
-      setIsFavorited(favStatus);
+      try {
+        const favStatus = await isFavorite(wallpaper.id);
+        setIsFavorited(favStatus);
+      } catch (error) {
+        logger.error("Error checking favorite status:", error);
+      }
     };
 
     checkFavoriteStatus();
@@ -49,6 +56,13 @@ export function WallpaperCard({
     e.stopPropagation();
 
     try {
+      // Check if we're in Expo Go on Android, which has limited media access
+      if (isRunningInExpoGo() && Platform.OS === "android") {
+        logger.warn(
+          "Limited functionality in Expo Go. Some features may not work properly."
+        );
+      }
+
       const newFavoriteStatus = await toggleFavorite(wallpaper.id);
       setIsFavorited(newFavoriteStatus);
 
@@ -57,7 +71,16 @@ export function WallpaperCard({
         onFavoritesChanged();
       }
     } catch (error) {
-      console.error("Failed to toggle favorite:", error);
+      logger.error("Failed to toggle favorite:", error);
+    }
+  };
+
+  // Determine image source based on whether it's local or remote
+  const getImageSource = () => {
+    if (wallpaper.isLocal && wallpaper.localImage) {
+      return wallpaper.localImage;
+    } else {
+      return { uri: wallpaper.thumbnailUrl };
     }
   };
 
@@ -68,7 +91,7 @@ export function WallpaperCard({
     >
       <TouchableOpacity style={styles.card}>
         <Image
-          source={{ uri: wallpaper.thumbnailUrl }}
+          source={getImageSource()}
           style={styles.image}
           resizeMode="cover"
         />

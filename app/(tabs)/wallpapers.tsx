@@ -29,17 +29,30 @@ const { width } = Dimensions.get("window");
 // Helper function to get unique categories
 const getAllCategories = () => {
   const wallpapers = getAllWallpapers();
-  const categories = new Map();
+  const categories = new Map<string, WallpaperItem>();
 
+  // First pass: collect all wallpapers by category
+  const wallpapersByCategory: Record<string, WallpaperItem[]> = {};
   wallpapers.forEach((wallpaper) => {
-    if (!categories.has(wallpaper.category)) {
-      categories.set(wallpaper.category, wallpaper);
+    if (!wallpapersByCategory[wallpaper.category]) {
+      wallpapersByCategory[wallpaper.category] = [];
     }
+    wallpapersByCategory[wallpaper.category].push(wallpaper);
   });
+
+  // Second pass: use the first wallpaper from each category as the thumbnail
+  Object.entries(wallpapersByCategory).forEach(
+    ([category, categoryWallpapers]) => {
+      if (categoryWallpapers.length > 0) {
+        categories.set(category, categoryWallpapers[0]);
+      }
+    }
+  );
 
   return Array.from(categories.entries()).map(([category, wallpaper]) => ({
     category,
     thumbnailUrl: wallpaper.thumbnailUrl,
+    localImage: wallpaper.localImage, // Make sure we pass the local image if it exists
   }));
 };
 
@@ -74,6 +87,10 @@ export default function WallpapersScreen() {
     }, 1000);
   };
 
+  const navigateToAdmin = () => {
+    router.push("/admin");
+  };
+
   const navigateToCategory = (category: string) => {
     router.push({
       pathname: "/categories",
@@ -102,7 +119,11 @@ export default function WallpapersScreen() {
           onPress={() => navigateToWallpaper(item.id)}
         >
           <ImageBackground
-            source={{ uri: item.thumbnailUrl }}
+            source={
+              item.isLocal && item.localImage
+                ? item.localImage
+                : { uri: item.thumbnailUrl }
+            }
             style={styles.searchResultImage}
             imageStyle={{ borderRadius: 12 }}
           >
@@ -114,7 +135,7 @@ export default function WallpapersScreen() {
         </TouchableOpacity>
       )}
       keyExtractor={(item) => item.id}
-      numColumns={2}
+      numColumns={3}
       columnWrapperStyle={styles.searchResultsColumns}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
@@ -140,7 +161,9 @@ export default function WallpapersScreen() {
           onPress={() => navigateToCategory(item.category)}
         >
           <ImageBackground
-            source={{ uri: item.thumbnailUrl }}
+            source={
+              item.localImage ? item.localImage : { uri: item.thumbnailUrl }
+            }
             style={styles.categoryImage}
             imageStyle={{ borderRadius: 12 }}
           >
@@ -173,6 +196,13 @@ export default function WallpapersScreen() {
             Explore wallpapers by category
           </ThemedText>
         </View>
+        <TouchableOpacity onPress={navigateToAdmin} style={styles.adminButton}>
+          <Ionicons
+            name="settings"
+            size={24}
+            color={Colors[colorScheme].text}
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
@@ -196,9 +226,12 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     marginBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   titleContainer: {
-    position: "relative",
+    flex: 1,
   },
   subtitle: {
     marginTop: 4,
@@ -249,8 +282,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   searchResultItem: {
-    width: (width - 40) / 2,
-    height: 200,
+    width: (width - 48) / 3,
+    height: 180,
     marginBottom: 16,
     borderRadius: 12,
     overflow: "hidden",
@@ -286,5 +319,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     opacity: 0.7,
+  },
+  adminButton: {
+    padding: 8,
+    borderRadius: 20,
   },
 });

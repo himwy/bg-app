@@ -60,11 +60,7 @@ export default function CategoriesScreen() {
             color={Colors[colorScheme].icon}
           />
         </TouchableOpacity>
-
-        <ThemedText type="title">Categories</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          {wallpapers.length} wallpapers available
-        </ThemedText>
+        <ThemedText style={styles.categoryTitle}>{category}</ThemedText>
       </View>
 
       {wallpapers.length > 0 ? (
@@ -72,7 +68,7 @@ export default function CategoriesScreen() {
           data={wallpapers}
           renderItem={({ item }) => <WallpaperCard wallpaper={item} />}
           keyExtractor={(item) => item.id}
-          numColumns={2}
+          numColumns={3}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
@@ -98,12 +94,17 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 16,
-    marginBottom: 16,
-    position: "relative",
+    paddingBottom: 16,
+  },
+  categoryTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginLeft: 16,
   },
   backButton: {
-    marginBottom: 16,
     width: 40,
     height: 40,
     justifyContent: "center",
@@ -114,10 +115,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 1.5,
     elevation: 2,
-  },
-  subtitle: {
-    marginTop: 4,
-    opacity: 0.7,
   },
   listContent: {
     paddingHorizontal: 16,

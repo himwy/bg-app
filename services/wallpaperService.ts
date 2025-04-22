@@ -6,6 +6,23 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Asset } from 'expo-asset';
+
+// Import WallpaperManage conditionally to handle null module
+let WallpaperManage: any = null;
+try {
+  WallpaperManage = require('react-native-wallpaper-manage');
+} catch (error) {
+  console.warn('WallpaperManage module is not available:', error);
+}
+
+// Define wallpaper type constants since they're missing from the type definitions
+// These values are based on common Android constants for wallpaper types
+const WALLPAPER_TYPE = {
+  HOME: 1,
+  LOCK: 2,
+  BOTH: 3
+};
 
 // Add a simple logging utility
 export const logger = {
@@ -23,107 +40,210 @@ export const logger = {
   }
 };
 
+// Helper function to check if running in Expo Go or development build
+export const isRunningInExpoGo = (): boolean => {
+  // This is a simplified check - constants may not be available in Expo Go
+  return !MediaLibrary.getPermissionsAsync || Platform.OS === 'web';
+};
+
+// Helper function to check if WallpaperManage is available
+export const isWallpaperManageAvailable = (): boolean => {
+  return WallpaperManage !== null && typeof WallpaperManage === 'object';
+};
+
+// Helper function to show a warning about Expo Go limitations
+export const showExpoGoWarning = (): void => {
+  logger.warn('MEDIA LIBRARY LIMITATION: You are running in Expo Go which has limited media access.');
+  logger.warn('For full functionality, create a development build: https://docs.expo.dev/develop/development-builds/create-a-build');
+};
+
 export interface WallpaperItem {
   id: string;
   name: string;
   category: string;
   imageUrl: string;
   thumbnailUrl: string;
+  isLocal?: boolean; // Flag to indicate if the image is stored locally
+  localImage?: any; // For require() statements when using local images
 }
 
 // Key for storing wallpapers in AsyncStorage
 const WALLPAPERS_STORAGE_KEY = '@wallpaper_app/wallpapers';
 
-// Initial default wallpaper data
-// ----------------------------------------------------
-// ADD YOUR WALLPAPERS HERE - Just add entries to this array!
-// ----------------------------------------------------
-const defaultWallpapers: WallpaperItem[] = [
-  {
-    id: '1',
-    name: 'Demon Slayer',
-    category: 'Anime',
-    imageUrl: 'https://images.pexels.com/photos/7809123/pexels-photo-7809123.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/7809123/pexels-photo-7809123.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '2',
-    name: 'One Piece',
-    category: 'Anime',
-    imageUrl: 'https://images.pexels.com/photos/5490778/pexels-photo-5490778.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/5490778/pexels-photo-5490778.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '3',
-    name: 'Anime Girl',
-    category: 'Aesthetic',
-    imageUrl: 'https://images.pexels.com/photos/5011647/pexels-photo-5011647.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/5011647/pexels-photo-5011647.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '4',
-    name: 'Night Cityscape',
-    category: 'Aesthetic',
-    imageUrl: 'https://images.pexels.com/photos/1252890/pexels-photo-1252890.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/1252890/pexels-photo-1252890.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '5',
-    name: 'Studio Ghibli',
-    category: 'Anime',
-    imageUrl: 'https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/1714208/pexels-photo-1714208.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '6',
-    name: 'Neo Tokyo',
-    category: 'Cyberpunk',
-    imageUrl: 'https://images.pexels.com/photos/2129796/pexels-photo-2129796.png',
-    thumbnailUrl: 'https://images.pexels.com/photos/2129796/pexels-photo-2129796.png?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '7',
-    name: 'Sakura Season',
-    category: 'Anime',
-    imageUrl: 'https://images.pexels.com/photos/1287075/pexels-photo-1287075.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/1287075/pexels-photo-1287075.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '8',
-    name: 'Neon Anime',
-    category: 'Cyberpunk',
-    imageUrl: 'https://images.pexels.com/photos/924824/pexels-photo-924824.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/924824/pexels-photo-924824.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '9',
-    name: 'Anime Beach',
-    category: 'Summer',
-    imageUrl: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '10',
-    name: 'Fantasy Aurora',
-    category: 'Fantasy',
-    imageUrl: 'https://images.pexels.com/photos/1693095/pexels-photo-1693095.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/1693095/pexels-photo-1693095.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '11',
-    name: 'Attack on Titan',
-    category: 'Anime',
-    imageUrl: 'https://images.pexels.com/photos/3493777/pexels-photo-3493777.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/3493777/pexels-photo-3493777.jpeg?auto=compress&cs=tinysrgb&w=400',
-  },
-  {
-    id: '12',
-    name: 'Naruto',
-    category: 'Anime',
-    imageUrl: 'https://images.pexels.com/photos/6507483/pexels-photo-6507483.jpeg',
-    thumbnailUrl: 'https://images.pexels.com/photos/6507483/pexels-photo-6507483.jpeg?auto=compress&cs=tinysrgb&w=400',
+// Structure that maps category names to their respective folder paths
+// This is the key to our folder-based organization
+interface CategoryFolderMap {
+  [category: string]: {
+    images: { [filename: string]: any }
   }
-];
+}
+
+// Pre-define all image requires statically to satisfy the bundler
+// This replaces dynamic requires with a static mapping
+interface ImageAssetMap {
+  [category: string]: {
+    [key: string]: any
+  }
+}
+
+const imageAssets: ImageAssetMap = {
+  'Nightcord at 25:00': {
+    '25_nightcord_1': require('../assets/images/wallpapers/Nightcord at 25-00/25 Nightcord 1.jpg'),
+    '25_nightcord_2': require('../assets/images/wallpapers/Nightcord at 25-00/25 Nightcord 2.jpg'),
+    '25_nightcord_3': require('../assets/images/wallpapers/Nightcord at 25-00/25 Nightcord 3.jpg'),
+    '25_nightcord_12': require('../assets/images/wallpapers/Nightcord at 25-00/25 Nightcord 12.jpg'),
+    '25_nightcord_45': require('../assets/images/wallpapers/Nightcord at 25-00/25 Nightcord 45.jpg'),
+    'cute_mizuki': require('../assets/images/wallpapers/Nightcord at 25-00/Cute Mizuki.jpg'),
+    'mizuki_wallpaper': require('../assets/images/wallpapers/Nightcord at 25-00/Mizuki Wallpaper.jpg'),
+    'mizuki_wallpaper_3': require('../assets/images/wallpapers/Nightcord at 25-00/Mizuki Wallpaper 3.jpg'),
+    'mizuki_wallpaper_5': require('../assets/images/wallpapers/Nightcord at 25-00/Mizuki Wallpaper 5.jpg'),
+    'niigo_nightcord': require('../assets/images/wallpapers/Nightcord at 25-00/Niigo Nightcord.jpg')
+  },
+  'MORE MORE JUMP!': {
+    // To be populated when images are added
+  },
+  'Leo/need': {
+    // To be populated when images are added
+  },
+  'Wonderlands x Showtime': {
+    // To be populated when images are added
+  },
+  'Vivid BAD SQUAD': {
+    // To be populated when images are added
+  },
+  'Miku & Virtual Singers': {
+    // To be populated when images are added
+  }
+};
+
+// Define file mappings from original filenames to asset keys
+const fileToAssetKeyMap: { [category: string]: { [filename: string]: string } } = {
+  'Nightcord at 25:00': {
+    '25 Nightcord 1.jpg': '25_nightcord_1',
+    '25 Nightcord 2.jpg': '25_nightcord_2',
+    '25 Nightcord 3.jpg': '25_nightcord_3',
+    '25 Nightcord 12.jpg': '25_nightcord_12',
+    '25 Nightcord 45.jpg': '25_nightcord_45',
+    'Cute Mizuki.jpg': 'cute_mizuki',
+    'Mizuki Wallpaper.jpg': 'mizuki_wallpaper',
+    'Mizuki Wallpaper 3.jpg': 'mizuki_wallpaper_3',
+    'Mizuki Wallpaper 5.jpg': 'mizuki_wallpaper_5',
+    'Niigo Nightcord.jpg': 'niigo_nightcord'
+  },
+  'MORE MORE JUMP!': {},
+  'Leo/need': {},
+  'Wonderlands x Showtime': {},
+  'Vivid BAD SQUAD': {},
+  'Miku & Virtual Singers': {}
+};
+
+// Helper function to load all images from a folder using the static mapping
+function requireWallpaperImages(category: string): { [filename: string]: any } {
+  const images: { [filename: string]: any } = {};
+  
+  try {
+    // Get available files for this category
+    const availableFiles: {[key: string]: string[]} = {
+      'Nightcord at 25:00': [
+        '25 Nightcord 1.jpg',
+        '25 Nightcord 2.jpg',
+        '25 Nightcord 3.jpg',
+        '25 Nightcord 12.jpg',
+        '25 Nightcord 45.jpg',
+        'Cute Mizuki.jpg',
+        'Mizuki Wallpaper.jpg',
+        'Mizuki Wallpaper 3.jpg',
+        'Mizuki Wallpaper 5.jpg',
+        'Niigo Nightcord.jpg'
+      ],
+      'MORE MORE JUMP!': [],
+      'Leo/need': [],
+      'Wonderlands x Showtime': [],
+      'Vivid BAD SQUAD': [],
+      'Miku & Virtual Singers': []
+    };
+    
+    // Process files for this category if any exist
+    const files = availableFiles[category] || [];
+    
+    // Use the mapping to get the correct require for each file
+    files.forEach(filename => {
+      // Generate a key from the filename: remove extension, replace spaces with underscores, make lowercase
+      const key = filename
+        .replace(/\.[^/.]+$/, '') // Remove file extension
+        .replace(/\s+/g, '_')    // Replace spaces with underscores
+        .toLowerCase();          // Make lowercase
+      
+      // Use the pre-defined static requires instead of dynamic requires
+      if (category in imageAssets && fileToAssetKeyMap[category][filename]) {
+        const assetKey = fileToAssetKeyMap[category][filename];
+        images[key] = imageAssets[category][assetKey];
+      }
+    });
+    
+    logger.info(`Loaded ${Object.keys(images).length} images for category ${category}`);
+    return images;
+  } catch (e) {
+    logger.error(`Error loading images for ${category}:`, e);
+    return {};
+  }
+}
+
+// Dynamically build the wallpaper folders map
+const wallpaperFolders: CategoryFolderMap = {
+  'MORE MORE JUMP!': {
+    images: requireWallpaperImages('MORE MORE JUMP!')
+  },
+  'Leo/need': {
+    images: requireWallpaperImages('Leo/need')
+  },
+  'Wonderlands x Showtime': {
+    images: requireWallpaperImages('Wonderlands x Showtime')
+  },
+  'Nightcord at 25:00': {
+    images: requireWallpaperImages('Nightcord at 25:00')
+  },
+  'Vivid BAD SQUAD': {
+    images: requireWallpaperImages('Vivid BAD SQUAD')
+  },
+  'Miku & Virtual Singers': {
+    images: requireWallpaperImages('Miku & Virtual Singers')
+  },
+};
+
+// Generate default wallpapers from the folder structure
+const generateDefaultWallpapers = (): WallpaperItem[] => {
+  logger.info('Generating wallpaper list from folder structure');
+  const wallpapersList: WallpaperItem[] = [];
+  
+  // Loop through each category folder
+  Object.entries(wallpaperFolders).forEach(([category, folderContent]) => {
+    // Loop through each image in the category
+    Object.entries(folderContent.images).forEach(([filename, imageModule]) => {
+      // Format the name from filename (replace underscores with spaces, capitalize words)
+      const formattedName = filename
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+        
+      // Create wallpaper entry
+      wallpapersList.push({
+        id: `${category}_${filename}`,
+        name: formattedName,
+        category,
+        imageUrl: '',
+        thumbnailUrl: '',
+        isLocal: true,
+        localImage: imageModule,
+      });
+    });
+  });
+  
+  logger.info(`Generated ${wallpapersList.length} wallpapers from folders`);
+  return wallpapersList;
+};
+
+// Initial default wallpaper data generated from folder structure
+const defaultWallpapers: WallpaperItem[] = generateDefaultWallpapers();
 
 // Get wallpapers from storage or use default
 let wallpapers: WallpaperItem[] = [...defaultWallpapers];
@@ -146,6 +266,42 @@ export const initializeWallpapers = async (): Promise<WallpaperItem[]> => {
   }
 };
 
+// Add a wallpaper to a specific category (for use with user uploads)
+export const addWallpaperToCategory = async (
+  uri: string, 
+  category: string, 
+  filename: string
+): Promise<WallpaperItem | null> => {
+  try {
+    // Format the name from filename
+    const name = filename
+      .replace(/\.[^/.]+$/, '') // Remove file extension
+      .replace(/_/g, ' ')       // Replace underscores with spaces
+      .replace(/\b\w/g, c => c.toUpperCase()); // Capitalize words
+      
+    // Create a new wallpaper entry
+    const newWallpaper: WallpaperItem = {
+      id: `${category}_${Date.now()}_${filename}`,
+      name,
+      category,
+      imageUrl: uri,
+      thumbnailUrl: uri,
+      isLocal: false, // User uploads aren't bundled local assets
+    };
+    
+    // Add to collection
+    const updatedWallpapers = [...wallpapers, newWallpaper];
+    await saveWallpapers(updatedWallpapers);
+    logger.info(`Added "${name}" to category "${category}"`);
+    
+    return newWallpaper;
+  } catch (error) {
+    logger.error('Error adding wallpaper to category:', error);
+    return null;
+  }
+};
+
+// Rest of the existing functions
 // Save wallpapers to storage
 export const saveWallpapers = async (wallpaperList: WallpaperItem[]): Promise<boolean> => {
   try {
@@ -186,34 +342,21 @@ export const addWallpaperFromGallery = async (name: string, category: string): P
     const imageAsset = result.assets[0];
     logger.info('Image selected:', imageAsset.uri);
     
-    // For a real app, you'd upload the image to a server here and get back URLs
-    // For this demo, we'll just use the local URI for both image and thumbnail
-    // In a real implementation, you'd:
-    // 1. Upload the image to your server or cloud storage
-    // 2. Generate a thumbnail 
-    // 3. Get back the URLs for both
+    // Extract filename from URI
+    const filename = imageAsset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
     
-    const newWallpaper: WallpaperItem = {
-      id: `local_${Date.now()}`,
-      name: name,
-      category: category,
-      imageUrl: imageAsset.uri, // In a real app, this would be a remote URL
-      thumbnailUrl: imageAsset.uri, // In a real app, this would be a remote URL
-    };
+    // Use the actual filename as the name if no name was provided
+    const wallpaperName = name || filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
     
-    // Add to collection
-    const updatedWallpapers = [...wallpapers, newWallpaper];
-    await saveWallpapers(updatedWallpapers);
-    
-    logger.info('Wallpaper added successfully');
-    return newWallpaper;
+    // Create wallpaper and add to the specified category
+    return await addWallpaperToCategory(imageAsset.uri, category, wallpaperName);
   } catch (error) {
     logger.error('Error adding wallpaper from gallery:', error);
     throw error;
   }
 };
 
-// Add multiple wallpapers from gallery (batch upload)
+// Modified to use file names as wallpaper names
 export const addMultipleWallpapersFromGallery = async (category: string): Promise<WallpaperItem[]> => {
   try {
     logger.info('Adding multiple wallpapers from gallery');
@@ -239,18 +382,19 @@ export const addMultipleWallpapersFromGallery = async (category: string): Promis
     
     logger.info(`${result.assets.length} images selected`);
     
-    // Process each image
-    const newWallpapers: WallpaperItem[] = result.assets.map((asset, index) => ({
-      id: `local_batch_${Date.now()}_${index}`,
-      name: `${category} ${index + 1}`, // Basic naming, could be improved
-      category: category,
-      imageUrl: asset.uri, // In a real app, this would be a remote URL
-      thumbnailUrl: asset.uri, // In a real app, this would be a remote URL
-    }));
+    // Process each image - using filenames for names
+    const newWallpapers: WallpaperItem[] = [];
     
-    // Add to collection
-    const updatedWallpapers = [...wallpapers, ...newWallpapers];
-    await saveWallpapers(updatedWallpapers);
+    for (const asset of result.assets) {
+      // Extract filename from URI
+      const filename = asset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
+      
+      // Create and add the wallpaper
+      const wallpaper = await addWallpaperToCategory(asset.uri, category, filename);
+      if (wallpaper) {
+        newWallpapers.push(wallpaper);
+      }
+    }
     
     logger.info(`${newWallpapers.length} wallpapers added successfully`);
     return newWallpapers;
@@ -468,59 +612,138 @@ export const setAsWallpaper = async (imageUrl: string, wallpaperType: 'home' | '
       throw new Error('Media library permission not granted');
     }
 
-    // Download the image first
-    logger.info('Downloading image');
-    const fileUri = FileSystem.documentDirectory + 'wallpaper.jpg';
-    const { uri } = await FileSystem.downloadAsync(imageUrl, fileUri);
-    logger.info('Image downloaded to:', uri);
+    // For local wallpapers, we need to create a temporary file
+    let uri = imageUrl;
+    
+    // If this is a local bundled image, we need to get it into a file URI format
+    // that can be used by the wallpaper setter
+    if (imageUrl === '') {
+      logger.info('Local wallpaper detected, preparing file');
+      
+      try {
+        // Create a temporary file in the cache directory
+        const tempFile = `${FileSystem.cacheDirectory}temp_wallpaper_${Date.now()}.jpg`;
+        
+        // Find the wallpaper item to get its localImage
+        const wallpaperItem = wallpapers.find(w => 
+          (w.imageUrl === imageUrl || imageUrl === '') && w.isLocal && w.localImage
+        );
+        
+        if (wallpaperItem) {
+          // Get the asset module from the require cache if possible
+          logger.info('Found local wallpaper:', wallpaperItem.name);
+          
+          try {
+            // For local image assets, we need to write them to a file first
+            // Get the asset URI from the expo-asset module
+            const asset = Asset.fromModule(wallpaperItem.localImage);
+            await asset.downloadAsync();
+            
+            if (asset.localUri) {
+              // Copy the asset to our temp location
+              await FileSystem.copyAsync({
+                from: asset.localUri,
+                to: tempFile
+              });
+              uri = tempFile;
+              logger.info('Created temporary file for local wallpaper:', uri);
+            } else {
+              throw new Error('Could not download local asset');
+            }
+          } catch (assetError) {
+            logger.error('Asset download error:', assetError);
+            // Use direct module approach as fallback
+            if (Platform.OS === 'android') {
+              // For Android, we'll use the Intent approach with the module directly
+              uri = tempFile;
+              logger.info('Using fallback approach for local wallpaper');
+            } else {
+              throw new Error('Could not prepare local asset for wallpaper');
+            }
+          }
+        } else {
+          throw new Error('Could not find local wallpaper data');
+        }
+      } catch (localError) {
+        logger.error('Error preparing local wallpaper:', localError);
+        throw new Error('Could not prepare local wallpaper for setting');
+      }
+    } else {
+      // Download the image first for remote URLs
+      logger.info('Downloading image');
+      const fileUri = FileSystem.documentDirectory + 'wallpaper.jpg';
+      const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+      uri = downloadResult.uri;
+      logger.info('Image downloaded to:', uri);
+    }
     
     if (Platform.OS === 'android') {
       logger.info('Setting wallpaper on Android');
-      // For Android, we need to convert the file:// URI to a content:// URI
-      const contentUri = await FileSystem.getContentUriAsync(uri);
-      logger.info('Content URI:', contentUri);
       
+      // Check if we're running in Expo Go
+      if (isRunningInExpoGo()) {
+        logger.warn('Running in Expo Go - direct wallpaper setting is not available');
+        showExpoGoWarning();
+        
+        // Save to gallery as fallback
+        await MediaLibrary.saveToLibraryAsync(uri);
+        logger.info('Saved to gallery instead (Expo Go limitation)');
+        return true;
+      }
+      
+      // Check if WallpaperManage is available
+      if (isWallpaperManageAvailable()) {
+        logger.info('Using WallpaperManage to set wallpaper');
+        try {
+          // Pass the URI as the first parameter, and the type as a second parameter
+          const result = await WallpaperManage.setWallpaper(
+            uri,
+            wallpaperType === 'home' 
+              ? WALLPAPER_TYPE.HOME 
+              : wallpaperType === 'lock' 
+                ? WALLPAPER_TYPE.LOCK 
+                : WALLPAPER_TYPE.BOTH
+          );
+          
+          logger.info('Successfully set wallpaper directly:', result);
+          return true;
+        } catch (error) {
+          logger.warn('Direct wallpaper setting failed, falling back to system methods:', error);
+        }
+      } else {
+        logger.warn('WallpaperManage module not available, using system intent fallback');
+      }
+      
+      // Fallback to previous method if direct setting fails or module isn't available
       try {
+        // For Android, we need to convert the file:// URI to a content:// URI
+        const contentUri = await FileSystem.getContentUriAsync(uri);
+        
         // Using a more universal approach with ACTION_ATTACH_DATA
         // This typically opens the system's "Complete action using" dialog
-        // where the user can choose the wallpaper app
-        logger.info('Launching wallpaper chooser intent');
         await IntentLauncher.startActivityAsync('android.intent.action.ATTACH_DATA', {
           data: contentUri,
           type: 'image/jpeg',
           flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
         });
-        logger.info('Successfully launched wallpaper intent on Android');
+        
+        logger.info('Successfully launched wallpaper intent on Android (fallback)');
         return true;
       } catch (intentError) {
-        logger.warn('First attempt failed, trying alternate method:', intentError);
-        
-        // Fall back to a different approach - try to open the image
-        // Most gallery apps offer "Set as wallpaper" functionality
-        try {
-          logger.info('Trying to open image with ACTION_VIEW');
-          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-            data: contentUri,
-            type: 'image/jpeg',
-            flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-          });
-          logger.info('Successfully opened image for user to set as wallpaper');
+        logger.error('Intent launcher error:', intentError);
+        // If this fails too, try the traditional wallpaper manager
+        if (isWallpaperManageAvailable()) {
+          const result = await WallpaperManage.setWallpaper(uri);
+          logger.info('Used wallpaper manager as last resort:', result);
           return true;
-        } catch (viewError) {
-          logger.error('All attempts to set wallpaper failed:', viewError);
-          
-          // As a last resort, save to gallery and inform user
-          await MediaLibrary.saveToLibraryAsync(uri);
-          logger.info('Image saved to gallery as a fallback');
-          throw new Error('Could not set wallpaper directly. The image has been saved to your gallery. Please use your device settings to set it as wallpaper.');
         }
+        throw new Error('All wallpaper setting methods failed');
       }
     } else {
       logger.info('Setting wallpaper on iOS (saving to gallery)');
       // iOS doesn't allow directly setting wallpapers, so we just save to gallery
       await MediaLibrary.saveToLibraryAsync(uri);
       logger.info('Successfully saved to gallery on iOS');
-      // No need to share when explicitly setting as wallpaper
       return true;
     }
   } catch (error) {
