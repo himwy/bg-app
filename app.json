@@ -8,6 +8,10 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "updates": {
+      "enabled": false,
+      "checkAutomatically": "OFF"
+    },
     "ios": {
       "supportsTablet": true
     },
